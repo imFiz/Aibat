@@ -3,7 +3,7 @@ import { Twitter, Shield, Smartphone, Users, Zap, CheckCircle, Info, AlertTriang
 
 import { User, Task, Tab, HistoryItem, BoostOption, ActiveBoost } from './types';
 import { CONFIG, MOCK_TASKS } from './constants';
-import { auth, db, doc, setDoc, GoogleAuthProvider, TwitterAuthProvider, signInWithPopup, signOut, collection, getDocs, query, where, limit } from './services/firebaseService';
+import { auth, db, doc, setDoc, getDoc, GoogleAuthProvider, TwitterAuthProvider, signInWithPopup, signOut, collection, getDocs, query, where, limit } from './services/firebaseService';
 
 import Dashboard from './components/Dashboard';
 import Earn from './components/Earn';
@@ -66,7 +66,6 @@ const App: React.FC = () => {
                 following: 0
             };
         }
-        setUser(currentUser);
 
         // Load History from LocalStorage
         const storedHistory = localStorage.getItem(`xb_history_${firebaseUser.uid}`);
@@ -74,62 +73,105 @@ const App: React.FC = () => {
             setHistory(JSON.parse(storedHistory));
         }
 
-        // Save/Update user in Firestore for others to find
+        // --- REALTIME DATA FETCHING ---
         try {
+            // 1. Fetch Relationships (Who follows me?)
+            const relRef = collection(db, "relationships");
+            const followersQ = query(relRef, where("followedId", "==", currentUser.uid));
+            const followersSnap = await getDocs(followersQ);
+            const followerIds = new Set<string>();
+            followersSnap.forEach(d => followerIds.add(d.data().followerId));
+
+            // 2. Fetch Relationships (Who do I follow?)
+            const followingQ = query(relRef, where("followerId", "==", currentUser.uid));
+            const followingSnap = await getDocs(followingQ);
+            const followingIds = new Set<string>();
+            followingSnap.forEach(d => followingIds.add(d.data().followedId));
+
+            // 3. Update User Counts & State
+            currentUser.followers = followerIds.size;
+            currentUser.following = followingIds.size;
+            setUser(currentUser);
+            
+            // Sync to Firestore
             await setDoc(doc(db, "users", currentUser.uid), {
                 uid: currentUser.uid,
                 name: currentUser.username,
                 handle: currentUser.handle,
                 avatar: currentUser.avatar,
-                isOnline: true, // Mark as online when they log in
-                lastSeen: new Date().toISOString()
+                isOnline: true,
+                lastSeen: new Date().toISOString(),
+                followers: followerIds.size,
+                following: followingIds.size
             }, { merge: true });
-        } catch (e) {
-            console.error("Error saving user to DB:", e);
-        }
-        
-        // Load tasks from Firestore (Real Users)
-        try {
-            const usersRef = collection(db, "users");
-            const q = query(usersRef, limit(50)); 
-            const querySnapshot = await getDocs(q);
+
+            // 4. Fetch Users for Tasks
+            // We need:
+            // a) People who follow me (for Follow Back) - excluding those I already follow
+            // b) Random people (for Explore) - excluding those I already follow
             
-            // Fetch relationships where the current user is the 'followed' one
-            // This tells us who is following the current user
-            const relationshipsRef = collection(db, "relationships");
-            const followersQuery = query(relationshipsRef, where("followedId", "==", currentUser.uid));
-            const followersSnapshot = await getDocs(followersQuery);
-            const followerIds = new Set();
-            followersSnapshot.forEach(doc => {
-                followerIds.add(doc.data().followerId);
+            const usersRef = collection(db, "users");
+            const usersQ = query(usersRef, limit(50)); // Fetch a batch of users
+            const usersSnap = await getDocs(usersQ);
+            
+            let fetchedTasks: Task[] = [];
+            const fetchedUserIds = new Set<string>();
+
+            // Process the batch
+            usersSnap.forEach((doc) => {
+                const uData = doc.data();
+                if (uData.uid === currentUser.uid) return; // Skip self
+                if (followingIds.has(uData.uid)) return; // Skip already followed
+
+                fetchedUserIds.add(uData.uid);
+                
+                fetchedTasks.push({
+                    id: uData.uid,
+                    name: uData.name || 'User',
+                    handle: uData.handle || 'user',
+                    avatar: (uData.avatar || '').replace('_normal', '') || 'https://picsum.photos/200',
+                    isOnline: uData.isOnline || false,
+                    price: 10,
+                    isFollowBack: followerIds.has(uData.uid)
+                });
             });
 
-            const realTasks: Task[] = [];
-            querySnapshot.forEach((doc) => {
-                const data = doc.data();
-                if (data.uid !== currentUser.uid) {
-                    realTasks.push({
-                        id: data.uid,
-                        name: data.name || 'User',
-                        handle: data.handle || 'user',
-                        avatar: data.avatar || 'https://picsum.photos/200',
-                        isOnline: data.isOnline || false,
-                        price: 10, // Default reward
-                        isFollowBack: followerIds.has(data.uid) // Check if this user follows me
-                    });
-                }
-            });
+            // 5. Handle Missing Followers (Follow Backs not in the batch)
+            // Identify followers who are NOT in the fetched batch and NOT already followed
+            const missingFollowerIds = Array.from(followerIds).filter(id => !fetchedUserIds.has(id) && !followingIds.has(id));
 
-            // If we have real users, use them. Otherwise fallback to MOCK_TASKS
-            const tasksSource = realTasks.length > 0 ? realTasks : MOCK_TASKS;
+            if (missingFollowerIds.length > 0) {
+                // Fetch these specific users
+                // Note: In a real app, use 'where uid in [...]' batches. Here we iterate for simplicity of the demo.
+                const missingPromises = missingFollowerIds.map(id => getDoc(doc(db, "users", id)));
+                const missingSnaps = await Promise.all(missingPromises);
+                
+                missingSnaps.forEach(snap => {
+                    if (snap.exists()) {
+                         const uData = snap.data();
+                         fetchedTasks.push({
+                            id: uData.uid,
+                            name: uData.name || 'User',
+                            handle: uData.handle || 'user',
+                            avatar: (uData.avatar || '').replace('_normal', '') || 'https://picsum.photos/200',
+                            isOnline: uData.isOnline || false,
+                            price: 10,
+                            isFollowBack: true
+                        });
+                    }
+                });
+            }
 
-            // Filter out tasks that have already been completed (stored in localStorage)
-            const completedTaskIds = JSON.parse(localStorage.getItem(`xb_completed_tasks_${firebaseUser.uid}`) || '[]');
-            const availableTasks = tasksSource.filter(task => !completedTaskIds.includes(task.id));
-            setTasks(availableTasks);
+            // If no real users found at all, fallback to mocks (filtered)
+            if (fetchedTasks.length === 0 && usersSnap.empty) {
+                 const availableTasks = MOCK_TASKS.filter(task => !followingIds.has(task.id));
+                 setTasks(availableTasks);
+            } else {
+                 setTasks(fetchedTasks);
+            }
 
         } catch (error) {
-            console.error("Error fetching users:", error);
+            console.error("Error fetching data:", error);
             // Fallback
             const completedTaskIds = JSON.parse(localStorage.getItem(`xb_completed_tasks_${firebaseUser.uid}`) || '[]');
             const availableTasks = MOCK_TASKS.filter(task => !completedTaskIds.includes(task.id));
