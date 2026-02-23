@@ -3,14 +3,14 @@ import { getAuth, GoogleAuthProvider, TwitterAuthProvider, signInWithPopup, sign
 import { getFirestore, doc, setDoc, getDoc, updateDoc, increment } from "firebase/firestore";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyBMZFDsbZvrDUU5fa1xiG-nF6zPzdCAoZA",
-    authDomain: "for4-773e0.firebaseapp.com",
-    projectId: "for4-773e0",
-    storageBucket: "for4-773e0.firebasestorage.app",
-    messagingSenderId: "778992413204",
-    appId: "1:778992413204:web:3520ecfa1e492bd04f1501",
-    measurementId: "G-XK41WBQ5D0",
-    databaseURL: "https://for4-773e0-default-rtdb.europe-west1.firebasedatabase.app"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+    databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL
 };
 
 const app = initializeApp(firebaseConfig);
