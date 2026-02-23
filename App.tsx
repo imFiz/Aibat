@@ -63,7 +63,10 @@ const App: React.FC = () => {
         }
         
         // Load tasks (Mock for now, replacing with real fetch logic)
-        setTasks(MOCK_TASKS);
+        // Filter out tasks that have already been completed (stored in localStorage)
+        const completedTaskIds = JSON.parse(localStorage.getItem(`xb_completed_tasks_${firebaseUser.uid}`) || '[]');
+        const availableTasks = MOCK_TASKS.filter(task => !completedTaskIds.includes(task.id));
+        setTasks(availableTasks);
       } else {
         setUser(null);
       }
@@ -185,6 +188,13 @@ const App: React.FC = () => {
 
           // Remove task locally
           setTasks(prev => prev.filter(t => t.id !== task.id));
+          
+          // Persist completed task to localStorage
+          const completedTaskIds = JSON.parse(localStorage.getItem(`xb_completed_tasks_${user.uid}`) || '[]');
+          if (!completedTaskIds.includes(task.id)) {
+              completedTaskIds.push(task.id);
+              localStorage.setItem(`xb_completed_tasks_${user.uid}`, JSON.stringify(completedTaskIds));
+          }
           
           showToast(msg, points > 0 ? 'success' : 'info');
           setProcessingTask(null);
