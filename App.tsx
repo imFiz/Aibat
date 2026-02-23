@@ -91,12 +91,19 @@ const App: React.FC = () => {
         // Load tasks from Firestore (Real Users)
         try {
             const usersRef = collection(db, "users");
-            // Fetch up to 20 users who are NOT the current user
-            // Note: Firestore != query requires an index, so we might just fetch and filter client side for small datasets
-            // For scalability, we would need a proper query. For now, let's fetch recent 50 and filter.
             const q = query(usersRef, limit(50)); 
             const querySnapshot = await getDocs(q);
             
+            // Fetch relationships where the current user is the 'followed' one
+            // This tells us who is following the current user
+            const relationshipsRef = collection(db, "relationships");
+            const followersQuery = query(relationshipsRef, where("followedId", "==", currentUser.uid));
+            const followersSnapshot = await getDocs(followersQuery);
+            const followerIds = new Set();
+            followersSnapshot.forEach(doc => {
+                followerIds.add(doc.data().followerId);
+            });
+
             const realTasks: Task[] = [];
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
@@ -108,7 +115,7 @@ const App: React.FC = () => {
                         avatar: data.avatar || 'https://picsum.photos/200',
                         isOnline: data.isOnline || false,
                         price: 10, // Default reward
-                        isFollowBack: false // Logic for follow back would require checking a 'follows' collection
+                        isFollowBack: followerIds.has(data.uid) // Check if this user follows me
                     });
                 }
             });
@@ -250,6 +257,18 @@ const App: React.FC = () => {
                   following: (prev.following || 0) + 1 
               }) : null);
               addToHistory('earn', `Followed @${task.handle}`, points, `https://twitter.com/${task.handle}`);
+
+              // Save relationship to Firestore so the other user sees "Follow Back"
+              try {
+                  const relationshipId = `${user.uid}_${task.id}`;
+                  setDoc(doc(db, "relationships", relationshipId), {
+                      followerId: user.uid,
+                      followedId: task.id,
+                      timestamp: new Date().toISOString()
+                  });
+              } catch (e) {
+                  console.error("Error saving relationship:", e);
+              }
           } else {
               msg = "Followed! (Daily limit reached)";
           }
