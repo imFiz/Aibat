@@ -49,12 +49,16 @@ const App: React.FC = () => {
         
         if (storedUser) {
             currentUser = JSON.parse(storedUser);
+            // Fix avatar quality for existing users
+            if (currentUser.avatar && currentUser.avatar.includes('_normal')) {
+                currentUser.avatar = currentUser.avatar.replace('_normal', '');
+            }
         } else {
             currentUser = {
                 uid: firebaseUser.uid,
                 username: firebaseUser.displayName || 'User',
                 handle: (firebaseUser as any).reloadUserInfo?.screenName || 'user',
-                avatar: firebaseUser.photoURL || 'https://picsum.photos/200',
+                avatar: (firebaseUser.photoURL || 'https://picsum.photos/200').replace('_normal', ''),
                 score: 500,
                 streak: 0,
                 lastCheckIn: undefined,
@@ -63,6 +67,12 @@ const App: React.FC = () => {
             };
         }
         setUser(currentUser);
+
+        // Load History from LocalStorage
+        const storedHistory = localStorage.getItem(`xb_history_${firebaseUser.uid}`);
+        if (storedHistory) {
+            setHistory(JSON.parse(storedHistory));
+        }
 
         // Save/Update user in Firestore for others to find
         try {
@@ -131,8 +141,9 @@ const App: React.FC = () => {
   useEffect(() => {
     if (user) {
         localStorage.setItem(`xb_user_${user.uid}`, JSON.stringify(user));
+        localStorage.setItem(`xb_history_${user.uid}`, JSON.stringify(history));
     }
-  }, [user]);
+  }, [user, history]);
 
   useEffect(() => {
     localStorage.setItem('xb_daily_follows', JSON.stringify({

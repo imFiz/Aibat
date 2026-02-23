@@ -84,7 +84,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             <img 
               src={user.avatar} 
               alt="Avatar" 
-              className="w-20 h-20 rounded-full border-4 border-[#121212] object-cover grayscale-[0.2]"
+              className="w-20 h-20 rounded-full border-4 border-[#121212] object-cover"
             />
             <div className="absolute bottom-0 right-0 bg-[#1A1A1A] border border-[#333] p-1 rounded-full">
                 <Rocket size={12} className="text-[#F2F0E9]" />
@@ -93,19 +93,19 @@ const Dashboard: React.FC<DashboardProps> = ({
           <div>
             <div className="text-[#F2F0E9] font-bold text-xl">{user.username}</div>
             <div className="text-neutral-400 text-sm font-mono">@{user.handle}</div>
-            
-            {/* Followers/Following Stats */}
-            <div className="flex space-x-4 mt-2">
-              <div className="flex items-center space-x-1">
-                <span className="text-[#F2F0E9] font-bold text-xs">{user.following || 0}</span>
-                <span className="text-neutral-500 text-[10px] uppercase">Following</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <span className="text-[#F2F0E9] font-bold text-xs">{user.followers || 0}</span>
-                <span className="text-neutral-500 text-[10px] uppercase">Followers</span>
-              </div>
-            </div>
           </div>
+        </div>
+
+        {/* Stats Grid - Cleaner Layout */}
+        <div className="grid grid-cols-2 gap-4 mb-4 relative z-10">
+            <div className="bg-[#1A1A1A]/50 rounded-xl p-2 border border-[#333] flex flex-col items-center">
+                <span className="text-[#F2F0E9] font-bold text-sm">{user.following || 0}</span>
+                <span className="text-neutral-500 text-[9px] uppercase tracking-wider">Following</span>
+            </div>
+            <div className="bg-[#1A1A1A]/50 rounded-xl p-2 border border-[#333] flex flex-col items-center">
+                <span className="text-[#F2F0E9] font-bold text-sm">{user.followers || 0}</span>
+                <span className="text-neutral-500 text-[9px] uppercase tracking-wider">Followers</span>
+            </div>
         </div>
 
         {/* Bottom Row: Streak & Rank */}
