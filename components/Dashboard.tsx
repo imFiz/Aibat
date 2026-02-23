@@ -97,14 +97,15 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Stats Grid - Cleaner Layout */}
-        <div className="grid grid-cols-2 gap-4 mb-4 relative z-10">
-            <div className="bg-[#1A1A1A]/50 rounded-xl p-2 border border-[#333] flex flex-col items-center">
-                <span className="text-[#F2F0E9] font-bold text-sm">{user.following || 0}</span>
-                <span className="text-neutral-500 text-[9px] uppercase tracking-wider">Following</span>
-            </div>
-            <div className="bg-[#1A1A1A]/50 rounded-xl p-2 border border-[#333] flex flex-col items-center">
-                <span className="text-[#F2F0E9] font-bold text-sm">{user.followers || 0}</span>
-                <span className="text-neutral-500 text-[9px] uppercase tracking-wider">Followers</span>
+        <div className="mb-4 relative z-10">
+            <div className="bg-[#1A1A1A]/50 rounded-xl p-3 border border-[#333] flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                    <div className="bg-[#F2F0E9] p-1.5 rounded-full text-black">
+                        <Rocket size={14} />
+                    </div>
+                    <span className="text-neutral-400 text-xs uppercase tracking-wider font-medium">Followers</span>
+                </div>
+                <span className="text-[#F2F0E9] font-black text-xl">{user.followers || 0}</span>
             </div>
         </div>
 
