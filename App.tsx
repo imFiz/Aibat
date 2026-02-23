@@ -190,9 +190,8 @@ const App: React.FC = () => {
   useEffect(() => {
     if (user) {
         localStorage.setItem(`xb_user_${user.uid}`, JSON.stringify(user));
-        localStorage.setItem(`xb_history_${user.uid}`, JSON.stringify(history));
     }
-  }, [user, history]);
+  }, [user]);
 
   useEffect(() => {
     localStorage.setItem('xb_daily_follows', JSON.stringify({
@@ -689,7 +688,7 @@ const App: React.FC = () => {
             onClose={() => setActiveModal(null)} 
             title="Activity History"
         >
-            {history.length === 0 ? (
+            {(!history || history.length === 0) ? (
                 <p className="text-center text-neutral-500 py-4 text-sm">No recent activity</p>
             ) : (
                 <div className="space-y-3">
