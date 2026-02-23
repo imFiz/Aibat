@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, TwitterAuthProvider, signInWithPopup, signOut, User as FirebaseUser } from "firebase/auth";
-import { getFirestore, doc, setDoc, getDoc, updateDoc, increment } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, increment, collection, getDocs, query, where, limit } from "firebase/firestore";
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -17,5 +17,5 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-export { auth, db, GoogleAuthProvider, TwitterAuthProvider, signInWithPopup, signOut, doc, setDoc, getDoc, updateDoc, increment };
+export { auth, db, GoogleAuthProvider, TwitterAuthProvider, signInWithPopup, signOut, doc, setDoc, getDoc, updateDoc, increment, collection, getDocs, query, where, limit };
 export type { FirebaseUser };

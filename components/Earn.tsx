@@ -25,7 +25,7 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, isProcessing, onFollow }) => 
           <img 
             src={task.avatar} 
             alt={task.name}
-            className="w-12 h-12 rounded-full bg-[#222] object-cover grayscale-[0.3]"
+            className="w-12 h-12 rounded-full bg-[#222] object-cover"
           />
           {task.isOnline && (
             <div className="absolute -top-1 -right-1 w-4 h-4 bg-[#121212] rounded-full flex items-center justify-center">

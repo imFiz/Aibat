@@ -6,6 +6,8 @@ export interface User {
   score: number;
   streak: number;
   lastCheckIn?: string; // Date string
+  followers: number;
+  following: number;
 }
 
 export interface Task {
@@ -23,6 +25,7 @@ export interface HistoryItem {
   desc: string;
   points: number;
   date: string;
+  link?: string;
 }
 
 export interface ActiveBoost {

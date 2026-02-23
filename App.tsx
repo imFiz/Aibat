@@ -3,7 +3,7 @@ import { Twitter, Shield, Smartphone, Users, Zap, CheckCircle, Info, AlertTriang
 
 import { User, Task, Tab, HistoryItem, BoostOption, ActiveBoost } from './types';
 import { CONFIG, MOCK_TASKS } from './constants';
-import { auth, db, doc, setDoc, GoogleAuthProvider, TwitterAuthProvider, signInWithPopup, signOut } from './services/firebaseService';
+import { auth, db, doc, setDoc, GoogleAuthProvider, TwitterAuthProvider, signInWithPopup, signOut, collection, getDocs, query, where, limit } from './services/firebaseService';
 
 import Dashboard from './components/Dashboard';
 import Earn from './components/Earn';
@@ -41,32 +41,84 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // Initial Auth Check
-    const unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       if (firebaseUser) {
-        // In a real app, fetch from Firestore here
-        // For demo, we construct user from auth + local storage simulation
+        // Construct user object
         const storedUser = localStorage.getItem(`xb_user_${firebaseUser.uid}`);
+        let currentUser: User;
         
         if (storedUser) {
-            setUser(JSON.parse(storedUser));
+            currentUser = JSON.parse(storedUser);
         } else {
-            const newUser: User = {
+            currentUser = {
                 uid: firebaseUser.uid,
                 username: firebaseUser.displayName || 'User',
                 handle: (firebaseUser as any).reloadUserInfo?.screenName || 'user',
                 avatar: firebaseUser.photoURL || 'https://picsum.photos/200',
                 score: 500,
                 streak: 0,
-                lastCheckIn: undefined
+                lastCheckIn: undefined,
+                followers: 0,
+                following: 0
             };
-            setUser(newUser);
+        }
+        setUser(currentUser);
+
+        // Save/Update user in Firestore for others to find
+        try {
+            await setDoc(doc(db, "users", currentUser.uid), {
+                uid: currentUser.uid,
+                name: currentUser.username,
+                handle: currentUser.handle,
+                avatar: currentUser.avatar,
+                isOnline: true, // Mark as online when they log in
+                lastSeen: new Date().toISOString()
+            }, { merge: true });
+        } catch (e) {
+            console.error("Error saving user to DB:", e);
         }
         
-        // Load tasks (Mock for now, replacing with real fetch logic)
-        // Filter out tasks that have already been completed (stored in localStorage)
-        const completedTaskIds = JSON.parse(localStorage.getItem(`xb_completed_tasks_${firebaseUser.uid}`) || '[]');
-        const availableTasks = MOCK_TASKS.filter(task => !completedTaskIds.includes(task.id));
-        setTasks(availableTasks);
+        // Load tasks from Firestore (Real Users)
+        try {
+            const usersRef = collection(db, "users");
+            // Fetch up to 20 users who are NOT the current user
+            // Note: Firestore != query requires an index, so we might just fetch and filter client side for small datasets
+            // For scalability, we would need a proper query. For now, let's fetch recent 50 and filter.
+            const q = query(usersRef, limit(50)); 
+            const querySnapshot = await getDocs(q);
+            
+            const realTasks: Task[] = [];
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                if (data.uid !== currentUser.uid) {
+                    realTasks.push({
+                        id: data.uid,
+                        name: data.name || 'User',
+                        handle: data.handle || 'user',
+                        avatar: data.avatar || 'https://picsum.photos/200',
+                        isOnline: data.isOnline || false,
+                        price: 10, // Default reward
+                        isFollowBack: false // Logic for follow back would require checking a 'follows' collection
+                    });
+                }
+            });
+
+            // If we have real users, use them. Otherwise fallback to MOCK_TASKS
+            const tasksSource = realTasks.length > 0 ? realTasks : MOCK_TASKS;
+
+            // Filter out tasks that have already been completed (stored in localStorage)
+            const completedTaskIds = JSON.parse(localStorage.getItem(`xb_completed_tasks_${firebaseUser.uid}`) || '[]');
+            const availableTasks = tasksSource.filter(task => !completedTaskIds.includes(task.id));
+            setTasks(availableTasks);
+
+        } catch (error) {
+            console.error("Error fetching users:", error);
+            // Fallback
+            const completedTaskIds = JSON.parse(localStorage.getItem(`xb_completed_tasks_${firebaseUser.uid}`) || '[]');
+            const availableTasks = MOCK_TASKS.filter(task => !completedTaskIds.includes(task.id));
+            setTasks(availableTasks);
+        }
+
       } else {
         setUser(null);
       }
@@ -150,12 +202,13 @@ const App: React.FC = () => {
       setToast({ msg, type });
   };
 
-  const addToHistory = (type: HistoryItem['type'], desc: string, points: number) => {
+  const addToHistory = (type: HistoryItem['type'], desc: string, points: number, link?: string) => {
       const newItem: HistoryItem = {
           type,
           desc,
           points,
-          date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          link
       };
       setHistory(prev => [newItem, ...prev].slice(0, 20));
   };
@@ -180,8 +233,12 @@ const App: React.FC = () => {
               setDailyFollowCount(prev => prev + 1);
               msg = `Followed! +${points} PTS`;
               
-              setUser(prev => prev ? ({ ...prev, score: prev.score + points }) : null);
-              addToHistory('earn', `Followed @${task.handle}`, points);
+              setUser(prev => prev ? ({ 
+                  ...prev, 
+                  score: prev.score + points,
+                  following: (prev.following || 0) + 1 
+              }) : null);
+              addToHistory('earn', `Followed @${task.handle}`, points, `https://twitter.com/${task.handle}`);
           } else {
               msg = "Followed! (Daily limit reached)";
           }
@@ -555,10 +612,39 @@ const App: React.FC = () => {
             ) : (
                 <div className="space-y-3">
                     {history.map((h, i) => (
-                        <div key={i} className="flex justify-between items-center py-2 border-b border-[#333] last:border-0">
-                            <div>
-                                <div className="text-xs text-[#F2F0E9] font-bold">{h.desc}</div>
-                                <div className="text-[10px] text-neutral-500">{h.date}</div>
+                        <div key={i} className="flex justify-between items-center py-3 border-b border-[#333] last:border-0">
+                            <div className="flex items-center space-x-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                    h.type === 'earn' ? 'bg-green-500/20 text-green-400' :
+                                    h.type === 'boost' ? 'bg-indigo-500/20 text-indigo-400' :
+                                    'bg-yellow-500/20 text-yellow-400'
+                                }`}>
+                                    {h.type === 'earn' ? <Users size={14} /> : 
+                                     h.type === 'boost' ? <Zap size={14} /> : 
+                                     <CheckCircle size={14} />}
+                                </div>
+                                <div>
+                                    <div className="text-xs text-[#F2F0E9] font-bold flex items-center">
+                                        {h.link ? (
+                                            <a 
+                                                href={h.link} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="hover:underline hover:text-blue-400 transition-colors flex items-center"
+                                            >
+                                                {h.desc}
+                                                <Twitter size={10} className="ml-1 opacity-50" />
+                                            </a>
+                                        ) : (
+                                            <span>{h.desc}</span>
+                                        )}
+                                    </div>
+                                    <div className="text-[10px] text-neutral-500">{h.date} • {
+                                        h.type === 'earn' ? 'Follow Reward' :
+                                        h.type === 'boost' ? 'Profile Boost' :
+                                        'Daily Streak'
+                                    }</div>
+                                </div>
                             </div>
                             <div className={`text-xs font-mono font-bold ${h.points > 0 ? 'text-green-400' : 'text-red-400'}`}>
                                 {h.points > 0 ? '+' : ''}{h.points}

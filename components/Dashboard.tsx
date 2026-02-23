@@ -93,6 +93,18 @@ const Dashboard: React.FC<DashboardProps> = ({
           <div>
             <div className="text-[#F2F0E9] font-bold text-xl">{user.username}</div>
             <div className="text-neutral-400 text-sm font-mono">@{user.handle}</div>
+            
+            {/* Followers/Following Stats */}
+            <div className="flex space-x-4 mt-2">
+              <div className="flex items-center space-x-1">
+                <span className="text-[#F2F0E9] font-bold text-xs">{user.following || 0}</span>
+                <span className="text-neutral-500 text-[10px] uppercase">Following</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <span className="text-[#F2F0E9] font-bold text-xs">{user.followers || 0}</span>
+                <span className="text-neutral-500 text-[10px] uppercase">Followers</span>
+              </div>
+            </div>
           </div>
         </div>
 
