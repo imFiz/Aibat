@@ -15,9 +15,12 @@ interface TaskItemProps {
   task: Task;
   isProcessing: boolean;
   onFollow: (task: Task) => void;
+  dailyFollowCount: number;
 }
 
-const TaskItem: React.FC<TaskItemProps> = ({ task, isProcessing, onFollow }) => {
+const TaskItem: React.FC<TaskItemProps> = ({ task, isProcessing, onFollow, dailyFollowCount }) => {
+  const isDailyLimitReached = dailyFollowCount >= CONFIG.DAILY_FOLLOW_LIMIT;
+
   return (
     <div className="glass-panel p-3 rounded-2xl flex items-center justify-between mb-3 animate-slide-up hover:bg-[#222] transition-colors">
       <div className="flex items-center space-x-3 overflow-hidden">
@@ -59,8 +62,12 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, isProcessing, onFollow }) => 
         ) : (
           <>
             <span>{task.isFollowBack ? 'Back' : 'Follow'}</span>
-            <div className="w-px h-3 bg-neutral-300 mx-1"></div>
-            <span>+{task.price}</span>
+            {!isDailyLimitReached && (
+                <>
+                    <div className="w-px h-3 bg-neutral-300 mx-1"></div>
+                    <span>+{task.price}</span>
+                </>
+            )}
           </>
         )}
       </button>
@@ -132,6 +139,7 @@ const Earn: React.FC<EarnProps> = ({
               task={task} 
               isProcessing={processingId === task.id}
               onFollow={onFollow}
+              dailyFollowCount={dailyFollowCount}
             />
           ))
         )}
@@ -152,6 +160,7 @@ const Earn: React.FC<EarnProps> = ({
               task={task} 
               isProcessing={processingId === task.id}
               onFollow={onFollow}
+              dailyFollowCount={dailyFollowCount}
             />
           ))
         )}

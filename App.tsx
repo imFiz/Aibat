@@ -270,7 +270,13 @@ const App: React.FC = () => {
           date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           link
       };
-      setHistory(prev => [newItem, ...prev].slice(0, 20));
+      setHistory(prev => {
+          const newHistory = [newItem, ...prev].slice(0, 20);
+          if (user) {
+              localStorage.setItem(`xb_history_${user.uid}`, JSON.stringify(newHistory));
+          }
+          return newHistory;
+      });
   };
 
   // --- GAME LOGIC ---
@@ -282,7 +288,7 @@ const App: React.FC = () => {
       window.open(`https://twitter.com/${task.handle}`, '_blank');
 
       // Verify logic - Increased to 4.5 seconds for simulation effect
-      setTimeout(() => {
+      setTimeout(async () => {
           if (!user) return;
 
           let points = 0;
@@ -303,7 +309,7 @@ const App: React.FC = () => {
               // Save relationship to Firestore so the other user sees "Follow Back"
               try {
                   const relationshipId = `${user.uid}_${task.id}`;
-                  setDoc(doc(db, "relationships", relationshipId), {
+                  await setDoc(doc(db, "relationships", relationshipId), {
                       followerId: user.uid,
                       followedId: task.id,
                       timestamp: new Date().toISOString()
