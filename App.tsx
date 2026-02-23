@@ -262,7 +262,7 @@ const App: React.FC = () => {
       setToast({ msg, type });
   };
 
-  const addToHistory = (type: HistoryItem['type'], desc: string, points: number, link?: string) => {
+  const addToHistory = (type: HistoryItem['type'], desc: string, points: number, uid: string, link?: string) => {
       const newItem: HistoryItem = {
           type,
           desc,
@@ -272,9 +272,7 @@ const App: React.FC = () => {
       };
       setHistory(prev => {
           const newHistory = [newItem, ...prev].slice(0, 20);
-          if (user) {
-              localStorage.setItem(`xb_history_${user.uid}`, JSON.stringify(newHistory));
-          }
+          localStorage.setItem(`xb_history_${uid}`, JSON.stringify(newHistory));
           return newHistory;
       });
   };
@@ -304,7 +302,14 @@ const App: React.FC = () => {
                   score: prev.score + points,
                   following: (prev.following || 0) + 1 
               }) : null);
-              addToHistory('earn', `Followed @${task.handle}`, points, `https://twitter.com/${task.handle}`);
+              addToHistory('earn', `Followed @${task.handle}`, points, user.uid, `https://twitter.com/${task.handle}`);
+
+              // Persist completed task to localStorage IMMEDIATELY
+              const completedTaskIds = JSON.parse(localStorage.getItem(`xb_completed_tasks_${user.uid}`) || '[]');
+              if (!completedTaskIds.includes(task.id)) {
+                  completedTaskIds.push(task.id);
+                  localStorage.setItem(`xb_completed_tasks_${user.uid}`, JSON.stringify(completedTaskIds));
+              }
 
               // Save relationship to Firestore so the other user sees "Follow Back"
               try {
@@ -319,17 +324,16 @@ const App: React.FC = () => {
               }
           } else {
               msg = "Followed! (Daily limit reached)";
+              // Even if no points, we mark as completed so it doesn't show up again
+              const completedTaskIds = JSON.parse(localStorage.getItem(`xb_completed_tasks_${user.uid}`) || '[]');
+              if (!completedTaskIds.includes(task.id)) {
+                  completedTaskIds.push(task.id);
+                  localStorage.setItem(`xb_completed_tasks_${user.uid}`, JSON.stringify(completedTaskIds));
+              }
           }
 
           // Remove task locally
           setTasks(prev => prev.filter(t => t.id !== task.id));
-          
-          // Persist completed task to localStorage
-          const completedTaskIds = JSON.parse(localStorage.getItem(`xb_completed_tasks_${user.uid}`) || '[]');
-          if (!completedTaskIds.includes(task.id)) {
-              completedTaskIds.push(task.id);
-              localStorage.setItem(`xb_completed_tasks_${user.uid}`, JSON.stringify(completedTaskIds));
-          }
           
           showToast(msg, points > 0 ? 'success' : 'info');
           setProcessingTask(null);
@@ -365,7 +369,7 @@ const App: React.FC = () => {
           lastCheckIn: today
       }) : null);
 
-      addToHistory('checkin', `Daily Check-in (Streak ${newStreak})`, totalReward);
+      addToHistory('checkin', `Daily Check-in (Streak ${newStreak})`, totalReward, user.uid);
       showToast(`Checked in! +${totalReward} PTS`);
   };
 
@@ -391,7 +395,7 @@ const App: React.FC = () => {
       };
       setActiveBoosts(prev => [newBoost, ...prev]);
 
-      addToHistory('boost', `Boosted Profile (+${option.count})`, -option.price);
+      addToHistory('boost', `Boosted Profile (+${option.count})`, -option.price, user.uid);
       showToast("Boost Activated!", 'success');
   };
 
