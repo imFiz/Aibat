@@ -44,35 +44,48 @@ const App: React.FC = () => {
         const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
             if (firebaseUser) {
                 // Construct user object
-                const storedUser = localStorage.getItem(`xb_user_${firebaseUser.uid}`);
                 let currentUser: User;
 
-                if (storedUser) {
-                    currentUser = JSON.parse(storedUser);
-                    // Defensively ensure uid exists in legacy local storage data
-                    if (!currentUser.uid) currentUser.uid = firebaseUser.uid;
-                    // Fix avatar quality for existing users
-                    if (currentUser.avatar && currentUser.avatar.includes('_normal')) {
-                        currentUser.avatar = currentUser.avatar.replace('_normal', '');
-                    }
-                } else {
-                    currentUser = {
-                        uid: firebaseUser.uid,
-                        username: firebaseUser.displayName || 'User',
-                        handle: (firebaseUser as any).reloadUserInfo?.screenName || 'user',
-                        avatar: (firebaseUser.photoURL || 'https://picsum.photos/200').replace('_normal', ''),
-                        score: 500,
-                        streak: 0,
-                        lastCheckIn: undefined,
-                        followers: 0,
-                        following: 0
-                    };
+                // 1. Fetch cloud data first
+                const userDocRef = doc(db, "users", firebaseUser.uid);
+                const userDocSnap = await getDoc(userDocRef);
+                const cloudData = userDocSnap.exists() ? userDocSnap.data() : null;
+
+                // 2. Fetch local data (for migration/fallback)
+                const storedUser = localStorage.getItem(`xb_user_${firebaseUser.uid}`);
+                const localData = storedUser ? JSON.parse(storedUser) : null;
+
+                // 3. Merge strategy: Cloud overrides Local, Local overrides Defaults
+                currentUser = {
+                    uid: firebaseUser.uid,
+                    username: cloudData?.name || localData?.username || firebaseUser.displayName || 'User',
+                    handle: cloudData?.handle || localData?.handle || (firebaseUser as any).reloadUserInfo?.screenName || 'user',
+                    avatar: cloudData?.avatar || localData?.avatar || (firebaseUser.photoURL || 'https://picsum.photos/200').replace('_normal', ''),
+                    score: cloudData?.score !== undefined ? cloudData.score : (localData?.score ?? 500),
+                    streak: cloudData?.streak !== undefined ? cloudData.streak : (localData?.streak ?? 0),
+                    lastCheckIn: cloudData?.lastCheckIn || localData?.lastCheckIn || undefined,
+                    followers: 0,
+                    following: 0
+                };
+
+                if (currentUser.avatar && currentUser.avatar.includes('_normal')) {
+                    currentUser.avatar = currentUser.avatar.replace('_normal', '');
                 }
 
-                // Load History from LocalStorage
+                // Load History from Cloud vs LocalStorage
                 const storedHistory = localStorage.getItem(`xb_history_${firebaseUser.uid}`);
-                if (storedHistory) {
+                if (cloudData?.history && cloudData.history.length > 0) {
+                    setHistory(cloudData.history);
+                    localStorage.setItem(`xb_history_${firebaseUser.uid}`, JSON.stringify(cloudData.history));
+                } else if (storedHistory) {
                     setHistory(JSON.parse(storedHistory));
+                }
+
+                // Load Completed Tasks from Cloud vs LocalStorage
+                const completedTaskIds = JSON.parse(localStorage.getItem(`xb_completed_tasks_${currentUser.uid}`) || '[]');
+                if (cloudData?.completedTasks) {
+                    const mergedTasks = Array.from(new Set([...completedTaskIds, ...cloudData.completedTasks]));
+                    localStorage.setItem(`xb_completed_tasks_${currentUser.uid}`, JSON.stringify(mergedTasks));
                 }
 
                 // --- REALTIME DATA FETCHING ---
@@ -104,7 +117,10 @@ const App: React.FC = () => {
                         isOnline: true,
                         lastSeen: new Date().toISOString(),
                         followers: followerIds.size,
-                        following: followingIds.size
+                        following: followingIds.size,
+                        score: currentUser.score,
+                        streak: currentUser.streak,
+                        lastCheckIn: currentUser.lastCheckIn || null
                     }, { merge: true });
 
                     // 4. Fetch Users for Tasks
@@ -198,8 +214,34 @@ const App: React.FC = () => {
     useEffect(() => {
         if (user) {
             localStorage.setItem(`xb_user_${user.uid}`, JSON.stringify(user));
+            // Sync critical game state to Firestore whenever user state updates!
+            setDoc(doc(db, "users", user.uid), {
+                score: user.score,
+                streak: user.streak,
+                lastCheckIn: user.lastCheckIn || null
+            }, { merge: true }).catch(console.error);
         }
     }, [user]);
+
+    useEffect(() => {
+        if (user && history.length > 0) {
+            // Keep history in sync on Cloud
+            setDoc(doc(db, "users", user.uid), {
+                history: history
+            }, { merge: true }).catch(console.error);
+        }
+    }, [history, user]);
+
+    useEffect(() => {
+        const completedTaskIds = JSON.parse(localStorage.getItem(`xb_completed_tasks_${user?.uid}`) || '[]');
+        if (user && completedTaskIds.length > 0) {
+            // Keep completed tasks array in sync on Cloud
+            setDoc(doc(db, "users", user.uid), {
+                completedTasks: completedTaskIds
+            }, { merge: true }).catch(console.error);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dailyFollowCount]); // dailyFollowCount increments when a task is completed, cheap proxy to sync completed array
 
     useEffect(() => {
         localStorage.setItem('xb_daily_follows', JSON.stringify({
@@ -679,10 +721,10 @@ const App: React.FC = () => {
                 {/* TOAST */}
                 {toast && (
                     <div className={`absolute top-20 left-1/2 transform -translate-x-1/2 w-[90%] px-4 py-3 rounded-xl shadow-2xl z-[60] flex items-center space-x-3 transition-all animate-fade-in ${toast.type === 'error'
-                            ? 'bg-[#1A1A1A] border border-red-900 text-red-400'
-                            : toast.type === 'info'
-                                ? 'bg-[#1A1A1A] border border-[#333] text-[#F2F0E9]'
-                                : 'bg-[#F2F0E9] text-black'
+                        ? 'bg-[#1A1A1A] border border-red-900 text-red-400'
+                        : toast.type === 'info'
+                            ? 'bg-[#1A1A1A] border border-[#333] text-[#F2F0E9]'
+                            : 'bg-[#F2F0E9] text-black'
                         }`}>
                         {toast.type === 'error' ? <AlertTriangle size={20} /> : (toast.type === 'info' ? <Info size={20} /> : <CheckCircle size={20} />)}
                         <span className="text-sm font-bold">{toast.msg}</span>
@@ -703,8 +745,8 @@ const App: React.FC = () => {
                                 <div key={i} className="flex justify-between items-center py-3 border-b border-[#333] last:border-0">
                                     <div className="flex items-center space-x-3">
                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${h.type === 'earn' ? 'bg-green-500/20 text-green-400' :
-                                                h.type === 'boost' ? 'bg-indigo-500/20 text-indigo-400' :
-                                                    'bg-yellow-500/20 text-yellow-400'
+                                            h.type === 'boost' ? 'bg-indigo-500/20 text-indigo-400' :
+                                                'bg-yellow-500/20 text-yellow-400'
                                             }`}>
                                             {h.type === 'earn' ? <Users size={14} /> :
                                                 h.type === 'boost' ? <Zap size={14} /> :
