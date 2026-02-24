@@ -25,7 +25,7 @@ export interface HistoryItem {
   desc: string;
   points: number;
   date: string;
-  link?: string;
+  link?: string | null;
 }
 
 export interface ActiveBoost {

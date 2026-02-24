@@ -317,7 +317,7 @@ const App: React.FC = () => {
             desc,
             points,
             date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            link
+            link: link || null
         };
         setHistory(prev => {
             const newHistory = [newItem, ...prev].slice(0, 20);
