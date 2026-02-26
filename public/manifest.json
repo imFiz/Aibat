@@ -1,0 +1,17 @@
+{
+    "name": "X-Booster",
+    "short_name": "X-Booster",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#000000",
+    "theme_color": "#000000",
+    "description": "A Web3 social engagement platform",
+    "icons": [
+        {
+            "src": "https://raw.githubusercontent.com/imFiz/Aibat/main/public/icon.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}
