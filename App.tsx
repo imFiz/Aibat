@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Twitter, Shield, Smartphone, Users, Zap, CheckCircle, Info, AlertTriangle, Rocket } from 'lucide-react';
+import { transact } from '@solana-mobile/mobile-wallet-adapter-protocol';
 
 import { User, Task, Tab, HistoryItem, BoostOption, ActiveBoost } from './types';
 import { CONFIG, MOCK_TASKS } from './constants';
@@ -454,9 +455,7 @@ const App: React.FC = () => {
         try {
             let provider = null;
 
-            // 1. Solana Seeker / Mobile Stack Injection
-            // The "dApp Store" environment on Seeker/Saga usually injects 'window.solana'.
-            // It does NOT always set 'isPhantom' to true.
+            // 1. Check for injected wallet providers (dApp Store browser, extensions)
             if (window.solana) {
                 provider = window.solana;
             } else if (window.solflare) {
@@ -470,18 +469,78 @@ const App: React.FC = () => {
                 localStorage.setItem('xb_wallet', pubKey);
                 showToast("Wallet Connected");
             } else {
-                // 2. Deep Link Fallback (for Standard Android/iOS usage outside of Seeker native environment)
                 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
                 if (isMobile) {
-                    const currentUrl = encodeURIComponent(window.location.href);
-                    // Using phantom link as a generic handler for now, 
-                    // but Seeker users should hit the 'if (window.solana)' block above if using the dApp store.
-                    const deepLink = `https://phantom.app/ul/browse/${currentUrl}?ref=${currentUrl}`;
-                    window.location.href = deepLink;
+                    // 2. Mobile Wallet Adapter — connects to Seeker built-in wallet
+                    try {
+                        const authResult = await transact(async (wallet: any) => {
+                            const auth = await wallet.authorize({
+                                cluster: 'mainnet-beta',
+                                identity: {
+                                    name: 'X-Booster',
+                                    uri: 'https://stud.whoim.space',
+                                    icon: '/icons/xb192.png'
+                                }
+                            });
+                            return auth;
+                        });
+
+                        if (authResult?.accounts?.length > 0) {
+                            const rawAddress = authResult.accounts[0].address;
+
+                            // Helper: convert bytes to base58
+                            const toBase58 = (bytes: Uint8Array): string => {
+                                const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+                                let num = BigInt(0);
+                                for (const byte of bytes) {
+                                    num = num * BigInt(256) + BigInt(byte);
+                                }
+                                let encoded = '';
+                                while (num > BigInt(0)) {
+                                    const remainder = Number(num % BigInt(58));
+                                    num = num / BigInt(58);
+                                    encoded = alphabet[remainder] + encoded;
+                                }
+                                for (const byte of bytes) {
+                                    if (byte === 0) encoded = '1' + encoded;
+                                    else break;
+                                }
+                                return encoded;
+                            };
+
+                            let pubKey: string;
+                            if (rawAddress instanceof Uint8Array) {
+                                pubKey = toBase58(rawAddress);
+                            } else if (typeof rawAddress === 'string') {
+                                // MWA often returns base64-encoded address string
+                                // Decode base64 → bytes → base58
+                                const binaryStr = atob(rawAddress);
+                                const bytes = new Uint8Array(binaryStr.length);
+                                for (let i = 0; i < binaryStr.length; i++) {
+                                    bytes[i] = binaryStr.charCodeAt(i);
+                                }
+                                pubKey = toBase58(bytes);
+                            } else {
+                                pubKey = String(rawAddress);
+                            }
+                            setWalletAddress(pubKey);
+                            localStorage.setItem('xb_wallet', pubKey);
+                            showToast("Wallet Connected");
+                        } else {
+                            showToast("No accounts returned from wallet", 'error');
+                        }
+                    } catch (mwaErr: any) {
+                        console.error("MWA error:", mwaErr);
+                        if (mwaErr?.message?.includes('Found no installed')) {
+                            showToast("No compatible wallet app found", 'error');
+                        } else {
+                            showToast("Wallet connection failed", 'error');
+                        }
+                    }
                 } else {
                     window.open('https://solana.com/ecosystem/explore?categories=wallet', '_blank');
-                    showToast("No Solana wallet found", 'info');
+                    showToast("No Solana wallet found. Install a browser extension.", 'info');
                 }
             }
         } catch (err) {

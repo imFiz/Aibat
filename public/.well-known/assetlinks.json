@@ -1,0 +1,14 @@
+[
+    {
+        "relation": [
+            "delegate_permission/common.handle_all_urls"
+        ],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "space.whoim.stud.twa",
+            "sha256_cert_fingerprints": [
+                "F5:7C:D3:D9:B7:91:4D:3C:1D:BB:A5:58:2F:18:23:38:BD:C7:02:C2:91:B8:7C:F4:45:45:C5:5A:D5:72:FA:13"
+            ]
+        }
+    }
+]
