@@ -11,6 +11,8 @@
 ---
 
 ## 🚀 Overview
+**Status:** 🛠️ *Update in progress — New features and optimizations coming soon!*
+
 **X-Booster (Aibat)** is a gamified SocialFi application designed to boost social presence and connect the Web3 community. By engaging with other users, tracking daily streaks, and participating in follow-exchanges, users earn points (PTS), climb the ranks, and build their ultimate social network.
 
 The platform integrates secure Firebase authentication (via X/Twitter) and seamlessly connects to Solana wallets (Phantom, Solflare, Saga/Seeker native), making it fully Web3-ready.
